@@ -14,10 +14,10 @@ settings:
 packages:
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: e44352494333686a5de418f85f7927b81c6a9fbe
+    revision: dd96b2daf1cd528cf4c8b77cccffbed3fb066fb3
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: e68f8365785c68b7a98b19d86b521f1d358afe00
+    revision: dd96b2daf1cd528cf4c8b77cccffbed3fb066fb3
 targets:
   # Static library: its objects (and the statically-linked SwiftTerm) fold into
   # whatever links it. AinkradAppKit is dynamic and NEVER embedded — resolved
