@@ -80,9 +80,18 @@ extension AinkradTerminalView: TerminalBufferSource {
         // non-idempotent/destructive commands the user approved exactly
         // once). Feed the command line + output straight to the terminal's
         // display buffer instead.
-        feed(text: "$ \(command)\r\n")
-        if !output.isEmpty {
-            feed(text: output.hasSuffix("\n") ? output : output + "\n")
+        //
+        // Both the command line and the output are SANITIZED first. `feed`
+        // runs the emulator's parser, which *acts* on control sequences — and
+        // this payload is captured stdout, routinely carrying untrusted bytes
+        // (a fetched page, a file in a cloned repo, a filename). Unsanitized, a
+        // `CSI 6n` in that text makes the emulator write its reply onto the
+        // shell's stdin: command injection into the user's live shell from
+        // output the agent merely printed. See `TerminalEchoSanitizer`.
+        feed(text: "$ \(TerminalEchoSanitizer.sanitize(command))\r\n")
+        let safeOutput = TerminalEchoSanitizer.sanitize(output)
+        if !safeOutput.isEmpty {
+            feed(text: safeOutput.hasSuffix("\n") ? safeOutput : safeOutput + "\n")
         }
     }
 }

@@ -9,16 +9,31 @@ import AinkradAppKit
 /// reference type — `HostServicesImpl`).
 @MainActor
 enum TerminalRuntime {
-    private static var stores: [ObjectIdentifier: TerminalSettingsStore] = [:]
-    private static var bridges: [ObjectIdentifier: TerminalContextBridge] = [:]
-    private static var actionTokens: [ObjectIdentifier: AgentActionToken] = [:]
+    private static let stores = PluginInstanceStorage<TerminalSettingsStore>()
+    private static let bridges = PluginInstanceStorage<TerminalContextBridge>()
+    private static let contextTokens = PluginInstanceStorage<PluginContextToken>()
+    private static let actionTokens = PluginInstanceStorage<AgentActionToken>()
+
+    /// The instance key for `host`.
+    ///
+    /// A generation-8 host mints one. A generation-7 host does not implement
+    /// `PluginInstanceIdentity`, so fall back to the OLD per-host object
+    /// identity — collapsing every legacy host onto one shared key would make
+    /// two hosts share a settings store, a regression rather than a fallback.
+    /// The address-reuse hazard therefore remains only on the legacy path,
+    /// exactly as before, and is gone on generation 8.
+    static func instance(of host: HostServices) -> PluginInstanceID {
+        if let identified = host as? PluginInstanceIdentity { return identified.instanceID }
+        let key = ObjectIdentifier(host as AnyObject)
+        if let existing = legacyIDs[key] { return existing }
+        let minted = PluginInstanceID()
+        legacyIDs[key] = minted
+        return minted
+    }
+    private static var legacyIDs: [ObjectIdentifier: PluginInstanceID] = [:]
 
     static func settingsStore(for host: HostServices) -> TerminalSettingsStore {
-        let key = ObjectIdentifier(host as AnyObject)
-        if let existing = stores[key] { return existing }
-        let store = TerminalSettingsStore(documents: host.documents)
-        stores[key] = store
-        return store
+        stores.value(for: instance(of: host)) { TerminalSettingsStore(documents: host.documents) }
     }
 
     /// The per-host agent-context bridge. Created and **registered with the host
@@ -26,11 +41,15 @@ enum TerminalRuntime {
     /// settings views share the one host, hence one bridge). Never removed: the
     /// registered closure returns nil once the view is gone.
     static func contextBridge(for host: HostServices) -> TerminalContextBridge {
-        let key = ObjectIdentifier(host as AnyObject)
-        if let existing = bridges[key] { return existing }
-        let bridge = TerminalContextBridge()
-        bridges[key] = bridge
-        _ = host.context.register { bridge.snapshot() }
+        let id = instance(of: host)
+        var created = false
+        let bridge = bridges.value(for: id) { created = true; return TerminalContextBridge() }
+        // Register only on first creation, and KEEP the token so `teardown`
+        // can remove it — "never removed" left a dead context source
+        // registered with the host for every instance ever opened.
+        if created {
+            _ = contextTokens.value(for: id) { host.context.register { bridge.snapshot() } }
+        }
         return bridge
     }
 
@@ -39,19 +58,29 @@ enum TerminalRuntime {
     /// via the per-host context bridge. Never torn down — a gone view means the
     /// bridge's weak source is nil and the echo is a no-op.
     static func registerActions(for host: HostServices) {
-        let key = ObjectIdentifier(host as AnyObject)
-        guard actionTokens[key] == nil else { return }
         let bridge = contextBridge(for: host)
-        let token = host.actions.register(actionID: "terminal.echo") { json in
-            guard let data = json.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let command = obj["command"] as? String else {
-                return AgentActionResult(text: "terminal.echo: malformed input", isError: true)
+        _ = actionTokens.value(for: instance(of: host)) {
+            host.actions.register(actionID: "terminal.echo") { json in
+                guard let data = json.data(using: .utf8),
+                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let command = obj["command"] as? String else {
+                    return AgentActionResult(text: "terminal.echo: malformed input", isError: true)
+                }
+                let output = obj["output"] as? String ?? ""
+                bridge.echo(command: command, output: output)
+                return AgentActionResult(text: "echoed", isError: false)
             }
-            let output = obj["output"] as? String ?? ""
-            bridge.echo(command: command, output: output)
-            return AgentActionResult(text: "echoed", isError: false)
         }
-        actionTokens[key] = token
+    }
+
+    /// Releases everything scoped to `instance` and unregisters it from the
+    /// host. All four registries above were `static` and never evicted, so a
+    /// closed Terminal left its settings store, its context source and its
+    /// `terminal.echo` handler live for the rest of the process.
+    static func teardown(instance: PluginInstanceID, host: HostServices?) {
+        stores.remove(instance)
+        bridges.remove(instance)
+        if let token = contextTokens.remove(instance) { host?.context.remove(token) }
+        if let token = actionTokens.remove(instance) { host?.actions.remove(token) }
     }
 }
