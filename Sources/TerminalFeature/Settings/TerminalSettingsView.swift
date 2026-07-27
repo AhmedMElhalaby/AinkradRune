@@ -14,7 +14,6 @@ struct TerminalSettingsView: View {
 
     @State private var shellPathText = ""
     @State private var shellValidationMessage: String?
-    @State private var isChoosingFolder = false
     @State private var isLoaded = false
 
     private var availableFonts: [String] { MonospacedFonts.available() }
@@ -38,10 +37,27 @@ struct TerminalSettingsView: View {
         .environment(\.ainkradTheme, tokens)
         .scrollContentBackground(.hidden)
         .onAppear(perform: loadIfNeeded)
-        .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
-            guard case .success(let url) = result else { return }
-            settingsStore.update { $0.defaultWorkingDirectory = url }
-        }
+    }
+
+    /// Uses `NSOpenPanel` rather than SwiftUI's `.fileImporter`.
+    ///
+    /// `.fileImporter` presents as a **sheet attached to the host window** —
+    /// system chrome grafted onto a Cardinal HUD surface, which is exactly the
+    /// seam the design language exists to avoid. `NSOpenPanel` runs as its own
+    /// panel, leaving the HUD window untouched, and it also shows hidden files
+    /// (a shell's working directory is often a dotfile path). Same choice, and
+    /// the same reasoning, as Leyline's key importer.
+    private func presentWorkingDirectoryPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
+        panel.message = "Choose the default working directory"
+        panel.prompt = "Choose"
+        panel.directoryURL = settingsStore.settings.defaultWorkingDirectory
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settingsStore.update { $0.defaultWorkingDirectory = url }
     }
 
     // MARK: - Appearance
@@ -331,7 +347,7 @@ struct TerminalSettingsView: View {
                         .help("Reset to home directory")
                     }
 
-                    Button("Choose…") { isChoosingFolder = true }
+                    Button("Choose…") { presentWorkingDirectoryPanel() }
                         .font(AinkradFont.display(12, weight: .medium))
                         .foregroundStyle(tokens.accentSecondary)
                         .buttonStyle(.plain)

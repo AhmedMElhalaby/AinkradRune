@@ -1,30 +1,27 @@
 import Foundation
+import AinkradAppKit
 
-/// The SSH launch payload Terminal accepts via `host.apps.takePendingLaunch()`.
-/// Opaque JSON on the wire; `kind` must be "ssh".
-struct SSHLaunch: Decodable, Equatable {
-    let host: String
-    let port: Int
-    let username: String
-    let identityFile: String?
+/// Terminal's view of the SSH launch contract.
+///
+/// The wire type is now `AinkradAppKit.SSHLaunchPayload` — ONE definition
+/// shared with Leyline, versioned and validated. This file used to hold a
+/// second, independent `Decodable` mirror of Leyline's `Encodable` struct: two
+/// hand-synced definitions of one format across two repos, with nothing to
+/// detect the moment they diverged.
+///
+/// `SSHLaunch` remains as a thin alias so the rest of Terminal is unchanged.
+typealias SSHLaunch = SSHLaunchPayload
 
-    private enum CodingKeys: String, CodingKey { case kind, host, port, username, identityFile }
-
-    init?(json: String?) {
-        guard let json, let data = json.data(using: .utf8) else { return nil }
-        guard let c = try? JSONDecoder().decode(SSHLaunch.self, from: data) else { return nil }
-        self = c
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        guard try c.decode(String.self, forKey: .kind) == "ssh" else {
-            throw DecodingError.dataCorruptedError(forKey: .kind, in: c, debugDescription: "not ssh")
-        }
-        host = try c.decode(String.self, forKey: .host)
-        port = try c.decode(Int.self, forKey: .port)
-        username = try c.decode(String.self, forKey: .username)
-        identityFile = try c.decodeIfPresent(String.self, forKey: .identityFile)
+extension SSHLaunchPayload {
+    /// Decodes a pending launch payload, **rejecting anything unsafe**.
+    ///
+    /// `validated()` is what stops `-oProxyCommand=<cmd>` and friends: every
+    /// field here ends up in an `ssh` argv, and `ssh`'s option surface runs
+    /// shell commands. Returning nil on a bad payload means a hostile launch
+    /// opens a plain terminal instead of executing something.
+    static func pending(from json: String?) -> SSHLaunchPayload? {
+        guard let payload = SSHLaunchPayload(json: json) else { return nil }
+        return try? payload.validated()
     }
 }
 

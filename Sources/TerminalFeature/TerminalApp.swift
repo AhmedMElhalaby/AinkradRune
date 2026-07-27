@@ -15,7 +15,7 @@ public struct TerminalApp: AinkradApp {
             settingsStore: TerminalRuntime.settingsStore(for: host),
             contextBridge: TerminalRuntime.contextBridge(for: host),
             theme: host.theme,
-            takeLaunch: { SSHLaunch(json: host.apps.takePendingLaunch()) }
+            takeLaunch: { SSHLaunchPayload.pending(from: host.apps.takePendingLaunch()) }
         ))
     }
 
@@ -35,5 +35,17 @@ public struct TerminalApp: AinkradApp {
             tokens: host.theme.tokens
         )
         return Color(hex: appearance.background).opacity(appearance.backgroundOpacity)
+    }
+}
+
+/// Generation 8: release this instance when the host closes it.
+///
+/// `TerminalRuntime` held four static, never-evicted registries — settings
+/// store, context bridge, its registration token, and the `terminal.echo`
+/// action token. Closing Terminal left all of them live for the rest of the
+/// process, including a context source the agent kept consulting.
+extension TerminalApp: AinkradAppTeardown {
+    public static func teardown(instance: PluginInstanceID) {
+        TerminalRuntime.teardown(instance: instance, host: nil)
     }
 }

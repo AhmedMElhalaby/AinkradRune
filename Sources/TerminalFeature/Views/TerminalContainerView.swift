@@ -29,6 +29,23 @@ final class AinkradTerminalView: LocalProcessTerminalView {
     var onReady: (() -> Void)?
     private var didBecomeReady = false
 
+    /// True when this pane owns the window's keyboard focus.
+    ///
+    /// Used to keep the agent's terminal context on the pane the user is
+    /// actually in. The context source used to be set once, in `makeNSView` —
+    /// making it whichever pane was created *last*, not the focused one. With
+    /// two terminals open, asking the assistant about "the terminal" fed it the
+    /// other pane's buffer, silently, with nothing to indicate which it read.
+    ///
+    /// Read rather than overriding `becomeFirstResponder`: SwiftTerm declares
+    /// that method `public`, not `open`, so it cannot be overridden from here.
+    /// (Having the *host* tell plugins which pane is active is the better fix
+    /// and belongs to the SDK focus work batched into the next generation.)
+    var ownsKeyboardFocus: Bool {
+        guard let responder = window?.firstResponder as? NSView else { return false }
+        return responder === self || responder.isDescendant(of: self)
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         guard !didBecomeReady, newSize.width > 8, newSize.height > 8 else { return }
@@ -84,6 +101,8 @@ struct TerminalContainerView: NSViewRepresentable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak view] in
             view?.startIfNeeded()
         }
+        // Seed the context source with this pane (it is the newest, and often
+        // the only, one) — but from here on, FOCUS decides; see `updateNSView`.
         contextBridge.setActiveSource(view)
         return view
     }
@@ -93,6 +112,13 @@ struct TerminalContainerView: NSViewRepresentable {
         // update takes the immediate path (the setter also flushes any pending
         // debounced resize the instant this pane becomes the focused one).
         nsView.applyResizeImmediately = resizesImmediately
+        // Keep the agent's terminal context on the FOCUSED pane, not the
+        // last-created one. Focusing a pane changes host state (`focusedID`),
+        // which re-renders every `BlockView` and lands here — so this runs on
+        // exactly the transitions that matter.
+        if nsView.ownsKeyboardFocus {
+            contextBridge.setActiveSource(nsView)
+        }
         apply(appearance, to: nsView, coordinator: context.coordinator)
     }
 
