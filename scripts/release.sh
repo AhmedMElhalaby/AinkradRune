@@ -6,6 +6,13 @@ DESC="A terminal for Ainkrad — blocks, themes, SwiftTerm-backed."
 AUTHOR="Ahmed M. Elhalaby"
 LONG_DESC="AinkradTerminal brings a full terminal into Ainkrad's workspace: block-based command history, theme-matched colors driven by the host's DesignTokens, and a SwiftTerm-backed emulator underneath. Split panes, resize freely, and switch themes without losing your scroll history."
 
+# Build CLEAN. An incremental build reuses whatever SwiftPM already resolved
+# into build/SourcePackages — so after an SDK repin it can silently produce a
+# bundle stamped with the PREVIOUS generation, which the host then refuses to
+# load. That happened: a release went out declaring generation 7 against a
+# generation-8 SDK. A release build is not the place to save 90 seconds.
+rm -rf build
+
 xcodegen generate
 xcodebuild -scheme TerminalPlugin -configuration Release -derivedDataPath build -destination 'platform=macOS' build
 BUNDLE="build/Build/Products/Release/TerminalPlugin.bundle"
