@@ -14,7 +14,7 @@ settings:
 packages:
   SwiftTerm:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
-    revision: dd96b2daf1cd528cf4c8b77cccffbed3fb066fb3
+    revision: e44352494333686a5de418f85f7927b81c6a9fbe
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
     revision: dd96b2daf1cd528cf4c8b77cccffbed3fb066fb3
