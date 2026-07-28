@@ -13,6 +13,10 @@ enum TerminalRuntime {
     private static let bridges = PluginInstanceStorage<TerminalContextBridge>()
     private static let contextTokens = PluginInstanceStorage<PluginContextToken>()
     private static let actionTokens = PluginInstanceStorage<AgentActionToken>()
+    /// Cached per host so the assistant reads the SAME bridge the on-screen
+    /// terminal registers itself with. A fresh server per call would capture a
+    /// fresh bridge with a nil source and always answer "no terminal open".
+    private static let mcpServers = PluginInstanceStorage<MCPAppServer>()
 
     /// The instance key for `host`.
     ///
@@ -53,6 +57,20 @@ enum TerminalRuntime {
         return bridge
     }
 
+    /// The per-host MCP server, built over this host's context bridge.
+    static func mcpServer(for host: HostServices) -> MCPAppServer {
+        mcpServers.value(for: instance(of: host)) {
+            let (server, failures) = TerminalMCPServer.make(
+                appID: TerminalApp.id, bridge: contextBridge(for: host))
+            // A dropped resource is a silently missing capability — say so
+            // rather than let the assistant just never see it.
+            if !failures.isEmpty {
+                host.log.error("Terminal MCP: resources rejected — \(failures.joined(separator: ", "))")
+            }
+            return server
+        }
+    }
+
     /// Register this host's gated action handlers **once**. The `terminal.echo`
     /// handler decodes {command, output} and renders it into the active terminal
     /// via the per-host context bridge. Never torn down — a gone view means the
@@ -80,6 +98,10 @@ enum TerminalRuntime {
     static func teardown(instance: PluginInstanceID, host: HostServices?) {
         stores.remove(instance)
         bridges.remove(instance)
+        // The server's resource providers capture the bridge — leaving it
+        // registered would keep a closed instance's bridge alive and let the
+        // assistant keep reading a terminal that is gone.
+        mcpServers.remove(instance)
         if let token = contextTokens.remove(instance) { host?.context.remove(token) }
         if let token = actionTokens.remove(instance) { host?.actions.remove(token) }
     }

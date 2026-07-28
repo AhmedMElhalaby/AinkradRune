@@ -38,6 +38,15 @@ public struct TerminalApp: AinkradApp {
     }
 }
 
+/// Publishes Terminal's read side to the assistant. Resources only, no tools —
+/// see `TerminalMCPServer` for why. Cached per host by `mcpServer(for:)` so the
+/// resources read the same bridge the visible terminal registers with.
+extension TerminalApp: AinkradAppMCP {
+    public static func makeMCPServer(host: HostServices) -> MCPAppServer {
+        TerminalRuntime.mcpServer(for: host)
+    }
+}
+
 /// Generation 8: release this instance when the host closes it.
 ///
 /// `TerminalRuntime` held four static, never-evicted registries — settings
