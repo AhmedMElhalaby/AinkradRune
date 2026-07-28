@@ -50,6 +50,34 @@ final class TerminalContextBridge {
         return AgentContextSnapshot(kind: "terminal", title: title, text: text)
     }
 
+    // MARK: - pull-based reads (MCP)
+
+    /// The active terminal's FULL scrollback, or nil when no terminal is live.
+    ///
+    /// Deliberately separate from `snapshot()`, and deliberately UNTRUNCATED.
+    /// `snapshot()` is the push path — every turn pays for that text, so it
+    /// tail-bounds at 8000 chars. This is the pull path, read only when the
+    /// model asks, and it asks precisely because it needs what that bound cut
+    /// off; re-applying the bound here would make the resource answer the same
+    /// question the model already had an answer to. Returns nil (not "") when
+    /// there is no source, so a caller can tell "no terminal open" from
+    /// "terminal open, nothing printed yet".
+    func activeBufferText() -> String? {
+        activeSource?.agentBufferText()
+    }
+
+    /// The active terminal's shell-reported working directory (OSC 7).
+    ///
+    /// Two distinguishable nils collapse here — no terminal live, or a live
+    /// terminal that never emitted OSC 7 — so a caller that must tell them
+    /// apart checks `hasActiveSource` first.
+    func activeCurrentDirectory() -> String? {
+        activeSource?.agentCurrentDirectory()
+    }
+
+    /// Whether a terminal view is currently live.
+    var hasActiveSource: Bool { activeSource != nil }
+
     /// Echo an agent-run command + output into the active terminal, if any.
     func echo(command: String, output: String) {
         activeSource?.agentEcho(command: command, output: output)
