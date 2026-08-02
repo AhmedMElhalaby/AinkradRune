@@ -1,12 +1,12 @@
 import SwiftUI
 import AinkradAppKit
 
-/// Terminal as an `AinkradApp` — the SDK contract. Compiled into the host for
+/// Rune as an `AinkradApp` — the SDK contract. Compiled into the host for
 /// now (slice 4a); slice 4b extracts it into its own catalog bundle. Depends
 /// only on `HostServices`, never on `AppEnvironment`.
-public struct TerminalApp: AinkradApp {
-    public static let id = "terminal"
-    public static let displayName = "Terminal"
+public struct RuneApp: AinkradApp {
+    public static let id = "rune"
+    public static let displayName = "Rune"
     public static let icon = "terminal"
 
     public static func makeRootView(host: HostServices) -> AnyView {
@@ -41,7 +41,7 @@ public struct TerminalApp: AinkradApp {
 /// Publishes Terminal's read side to the assistant. Resources only, no tools —
 /// see `TerminalMCPServer` for why. Cached per host by `mcpServer(for:)` so the
 /// resources read the same bridge the visible terminal registers with.
-extension TerminalApp: AinkradAppMCP {
+extension RuneApp: AinkradAppMCP {
     public static func makeMCPServer(host: HostServices) -> MCPAppServer {
         TerminalRuntime.mcpServer(for: host)
     }
@@ -53,7 +53,7 @@ extension TerminalApp: AinkradAppMCP {
 /// store, context bridge, its registration token, and the `terminal.echo`
 /// action token. Closing Terminal left all of them live for the rest of the
 /// process, including a context source the agent kept consulting.
-extension TerminalApp: AinkradAppTeardown {
+extension RuneApp: AinkradAppTeardown {
     public static func teardown(instance: PluginInstanceID) {
         TerminalRuntime.teardown(instance: instance, host: nil)
     }

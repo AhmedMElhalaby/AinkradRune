@@ -30,10 +30,10 @@ targets:
       - package: SwiftTerm
       - package: AinkradAppKit
         embed: false
-  TerminalPlugin:
+  RunePlugin:
     type: bundle
     platform: macOS
-    sources: [Sources/TerminalPlugin]
+    sources: [Sources/RunePlugin]
     postBuildScripts:
       # Generate AinkradAPIVersion from the SDK this build linked,
       # rather than trusting the hand-typed Info.plist value.
@@ -58,7 +58,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ainkrad.plugin.terminal
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Sources/TerminalPlugin/Info.plist
+        INFOPLIST_FILE: Sources/RunePlugin/Info.plist
         MACH_O_TYPE: mh_bundle
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
         OTHER_LDFLAGS: ["-lTerminalFeature"]
@@ -71,6 +71,6 @@ targets:
       - package: SwiftTerm
       - package: AinkradAppKit
 schemes:
-  TerminalPlugin:
-    build: { targets: { TerminalPlugin: all, TerminalFeatureTests: [test] } }
+  RunePlugin:
+    build: { targets: { RunePlugin: all, TerminalFeatureTests: [test] } }
     test:  { config: Debug, targets: [TerminalFeatureTests] }
