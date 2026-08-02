@@ -21,7 +21,7 @@ struct TerminalMCPServerTests {
             source: FakeBufferSource?, failures: [String]) {
         let bridge = TerminalContextBridge()
         if let source { bridge.setActiveSource(source) }
-        let (server, failures) = TerminalMCPServer.make(appID: "terminal", bridge: bridge)
+        let (server, failures) = TerminalMCPServer.make(appID: "rune", bridge: bridge)
         return (server, bridge, source, failures)
     }
 
@@ -157,7 +157,7 @@ struct TerminalMCPServerTests {
             let source = FakeBufferSource(buffer: "gone")
             bridge.setActiveSource(source)
         }
-        let (server, _) = TerminalMCPServer.make(appID: "terminal", bridge: bridge)
+        let (server, _) = TerminalMCPServer.make(appID: "rune", bridge: bridge)
         // The bridge holds the source weakly, so this exercises the nil path
         // without crashing.
         #expect(try await read(server, TerminalMCPServer.bufferResourceURI)
