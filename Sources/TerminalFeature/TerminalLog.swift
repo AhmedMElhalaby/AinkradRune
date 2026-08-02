@@ -1,5 +1,5 @@
 import OSLog
 
 enum TerminalLog {
-    static let terminal = Logger(subsystem: "com.ainkrad.plugin.terminal", category: "terminal")
+    static let terminal = Logger(subsystem: "com.ainkrad.plugin.rune", category: "terminal")
 }

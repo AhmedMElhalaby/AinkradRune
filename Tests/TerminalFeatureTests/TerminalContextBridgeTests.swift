@@ -27,7 +27,7 @@ struct TerminalContextBridgeTests {
         let bridge = TerminalContextBridge()
         let source = FakeBufferSource(buffer: "x", cwd: "/Users/x/proj")
         bridge.setActiveSource(source)
-        #expect(bridge.snapshot()?.title == "Terminal — /Users/x/proj")
+        #expect(bridge.snapshot()?.title == "Rune — /Users/x/proj")
     }
 
     @Test("title falls back to Terminal when no cwd")
@@ -35,7 +35,7 @@ struct TerminalContextBridgeTests {
         let bridge = TerminalContextBridge()
         let source = FakeBufferSource(buffer: "x", cwd: nil)
         bridge.setActiveSource(source)
-        #expect(bridge.snapshot()?.title == "Terminal")
+        #expect(bridge.snapshot()?.title == "Rune")
     }
 
     @Test("blank/whitespace buffer yields nil")

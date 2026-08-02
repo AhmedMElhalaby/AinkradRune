@@ -1,4 +1,4 @@
-name: AinkradTerminal
+name: AinkradRune
 options:
   bundleIdPrefix: com.ainkrad
   deploymentTarget: { macOS: "14.0" }

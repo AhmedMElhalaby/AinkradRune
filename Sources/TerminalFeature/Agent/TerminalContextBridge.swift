@@ -43,10 +43,15 @@ final class TerminalContextBridge {
         guard !text.isEmpty else { return nil }
         let title: String
         if let cwd = source.agentCurrentDirectory(), !cwd.isEmpty {
-            title = "Terminal — \(cwd)"
+            title = "Rune — \(cwd)"
         } else {
-            title = "Terminal"
+            title = "Rune"
         }
+        // `kind` stays "terminal" through the rename. It names the CONTENT —
+        // a terminal buffer — not the app, and it is a persisted cross-repo
+        // contract: the host's Context-privacy row and every saved opt-out in
+        // `agent-context-settings` are keyed on it. Renaming it to "rune" would
+        // silently re-enable a kind the user had turned off.
         return AgentContextSnapshot(kind: "terminal", title: title, text: text)
     }
 
