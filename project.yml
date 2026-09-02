@@ -21,7 +21,7 @@ packages:
     # pin — the host embeds the one dynamic copy of the SDK, and a plugin built
     # against a newer revision links symbols that copy does not define and dies
     # at Bundle.load() with no diagnostic.
-    revision: 45e6848c28b784d7a696f4b0a01a30313bcfff01
+    revision: 9b10f58b3f4fb2845ebdf0ecb10e579c8dfca4bb
 targets:
   # Static library: its objects (and the statically-linked SwiftTerm) fold into
   # whatever links it. AinkradAppKit is dynamic and NEVER embedded — resolved
