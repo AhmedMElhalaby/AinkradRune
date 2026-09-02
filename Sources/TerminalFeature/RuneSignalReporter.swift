@@ -51,6 +51,27 @@ struct RuneSignalReporter {
             dedupeKey: "rune.session:\(sessionID.uuidString)")
     }
 
+    /// The program running in a pane rang the terminal bell.
+    ///
+    /// This is the "a CLI wants you" case — Claude Code's terminal-bell channel
+    /// writes BEL when a turn finishes or it needs input, and so does anything
+    /// else that has no UI of its own.
+    ///
+    /// `.info`, not `.warning`: a bell is an attention request, not a problem,
+    /// and some shells also ring it for ambiguous tab-completion. The dedupe key
+    /// is the session, so a run of bells coalesces into one row with a count
+    /// rather than a wall of identical rows — which is what makes it safe to
+    /// report something a shell can emit incidentally.
+    func bellRang(sessionID: UUID) {
+        signals.emit(
+            kind: "terminal.bell",
+            severity: .info,
+            title: "Terminal needs your attention",
+            body: nil,
+            importance: .normal,
+            dedupeKey: "rune.bell:\(sessionID.uuidString)")
+    }
+
     /// A configured shell or working directory was rejected at startup. Rune
     /// already shows these inline in the block; the feed keeps them after the
     /// block is gone, which is when the user usually wonders what happened.

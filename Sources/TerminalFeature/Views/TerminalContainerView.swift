@@ -29,6 +29,26 @@ final class AinkradTerminalView: LocalProcessTerminalView {
     var onReady: (() -> Void)?
     private var didBecomeReady = false
 
+    /// Fired when the program running in this pane rings the terminal bell.
+    ///
+    /// Overriding is the only way to see it: `LocalProcessTerminalView` makes
+    /// itself the `terminalDelegate` and forwards just four callbacks to its
+    /// `processDelegate` — sizeChanged, setTerminalTitle,
+    /// hostCurrentDirectoryUpdate and processTerminated. `bell` is not among
+    /// them, so it reaches this window and dies here unless we catch it.
+    ///
+    /// This is how a CLI says "I need you": Claude Code's terminal-bell
+    /// notification channel writes BEL, and so does anything else that wants
+    /// attention without owning a UI.
+    var onBell: (() -> Void)?
+
+    override func bell(source: Terminal) {
+        // Still ring: the audible/visual bell is the terminal's own behaviour
+        // and reporting it is additive, not a replacement.
+        super.bell(source: source)
+        onBell?()
+    }
+
     /// True when this pane owns the window's keyboard focus.
     ///
     /// Used to keep the agent's terminal context on the pane the user is
@@ -83,6 +103,7 @@ struct TerminalContainerView: NSViewRepresentable {
     func makeNSView(context: Context) -> AinkradTerminalView {
         let view = AinkradTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
+        view.onBell = { [weak coordinator = context.coordinator] in coordinator?.bellRang() }
         view.applyResizeImmediately = resizesImmediately
         apply(appearance, to: view, coordinator: context.coordinator)
         context.coordinator.installScrollReveal(for: view)
@@ -269,6 +290,13 @@ struct TerminalContainerView: NSViewRepresentable {
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
         func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+
+        /// The program in this pane rang the bell.
+        func bellRang() {
+            Task { @MainActor [session, reporter] in
+                reporter.bellRang(sessionID: session.id)
+            }
+        }
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             Task { @MainActor [session, reporter] in

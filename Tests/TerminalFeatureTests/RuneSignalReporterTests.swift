@@ -104,12 +104,41 @@ struct RuneSignalReporterTests {
         #expect(emitter.calls[0].body?.contains("/tmp/gone") == true)
     }
 
+    @Test("a terminal bell is reported as an attention request, not a problem")
+    func bellIsReported() {
+        let (reporter, emitter) = self.reporter()
+        reporter.bellRang(sessionID: UUID())
+        #expect(emitter.calls.count == 1)
+        #expect(emitter.calls[0].kind == "terminal.bell")
+        #expect(emitter.calls[0].severity == .info,
+                "a bell is an attention request; some shells ring it for tab completion")
+        #expect(emitter.calls[0].title == "Terminal needs your attention")
+    }
+
+    @Test("repeated bells in one session share a dedupe key, so they coalesce")
+    func bellsCoalescePerSession() {
+        let (reporter, emitter) = self.reporter()
+        let id = UUID()
+        for _ in 0..<5 { reporter.bellRang(sessionID: id) }
+        #expect(Set(emitter.calls.map(\.dedupeKey)).count == 1,
+                "a run of bells must be one row with a count, not five rows")
+    }
+
+    @Test("bells from different sessions do not coalesce into each other")
+    func bellsAreScopedToSession() {
+        let (reporter, emitter) = self.reporter()
+        reporter.bellRang(sessionID: UUID())
+        reporter.bellRang(sessionID: UUID())
+        #expect(Set(emitter.calls.map(\.dedupeKey)).count == 2)
+    }
+
     @Test("every kind Rune emits is one the host will accept")
     func kindsAreValid() {
         let (reporter, emitter) = self.reporter()
         reporter.sessionEnded(exitCode: 1, isRemote: false, host: nil, sessionID: UUID())
         reporter.sessionEnded(exitCode: 0, isRemote: true, host: "h", sessionID: UUID())
         reporter.startupNotices(["x"], sessionID: UUID())
+        reporter.bellRang(sessionID: UUID())
         // The host rejects an invalid kind SILENTLY, which is how
         // `session.needsInput` was lost during planning. Assert, do not assume.
         for call in emitter.calls {
