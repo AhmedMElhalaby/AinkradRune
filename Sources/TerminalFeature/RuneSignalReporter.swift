@@ -72,6 +72,32 @@ struct RuneSignalReporter {
             dedupeKey: "rune.bell:\(sessionID.uuidString)")
     }
 
+    /// A program in the pane asked to show a notification, via OSC 9.
+    ///
+    /// This is the path that actually carries coding agents: Claude Code's
+    /// notification hook writes `ESC ] 9 ; conterm-agent:claude:attention:<path>
+    /// BEL`, and the trailing BEL is the sequence terminator rather than a
+    /// bell — so a terminal listening only for bells hears nothing.
+    ///
+    /// Unlike `bellRang`, this carries text, so the row can say which agent
+    /// wants you and why.
+    func agentNotification(payload: String, sessionID: UUID) {
+        guard let parsed = TerminalOSCNotification.parse(payload) else { return }
+        let isError = TerminalOSCNotification.isError(payload)
+        signals.emit(
+            kind: isError ? "terminal.agent-error" : "terminal.agent-attention",
+            severity: isError ? .warning : .info,
+            title: parsed.title,
+            body: parsed.body,
+            // `.urgent` for attention: an agent that is BLOCKED on you is the
+            // single most valuable notification in the product — it is the case
+            // where not knowing costs you the whole wait.
+            importance: isError ? .urgent : .urgent,
+            // Per session AND per title, so "needs attention" and "finished"
+            // are separate rows while a repeat of either coalesces.
+            dedupeKey: "rune.agent:\(sessionID.uuidString):\(parsed.title)")
+    }
+
     /// A configured shell or working directory was rejected at startup. Rune
     /// already shows these inline in the block; the feed keeps them after the
     /// block is gone, which is when the user usually wonders what happened.

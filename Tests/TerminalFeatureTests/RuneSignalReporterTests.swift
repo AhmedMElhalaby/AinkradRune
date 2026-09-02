@@ -132,6 +132,46 @@ struct RuneSignalReporterTests {
         #expect(Set(emitter.calls.map(\.dedupeKey)).count == 2)
     }
 
+    @Test("Claude Code's real hook payload becomes an urgent attention event")
+    func agentAttention() {
+        let (reporter, emitter) = self.reporter()
+        reporter.agentNotification(
+            payload: "conterm-agent:claude:attention:/tmp/t.jsonl", sessionID: UUID())
+        #expect(emitter.calls.count == 1)
+        #expect(emitter.calls[0].kind == "terminal.agent-attention")
+        #expect(emitter.calls[0].title == "Claude needs your attention")
+        #expect(emitter.calls[0].body == "/tmp/t.jsonl")
+        #expect(emitter.calls[0].importance == .urgent,
+                "an agent blocked on you is the case where not knowing costs the whole wait")
+    }
+
+    @Test("an agent error is a warning with its own kind")
+    func agentError() {
+        let (reporter, emitter) = self.reporter()
+        reporter.agentNotification(payload: "conterm-agent:claude:error:boom", sessionID: UUID())
+        #expect(emitter.calls[0].kind == "terminal.agent-error")
+        #expect(emitter.calls[0].severity == .warning)
+    }
+
+    @Test("attention and finished are separate rows, but a repeat of either coalesces")
+    func agentDedupeKeys() {
+        let (reporter, emitter) = self.reporter()
+        let id = UUID()
+        reporter.agentNotification(payload: "conterm-agent:claude:attention:a", sessionID: id)
+        reporter.agentNotification(payload: "conterm-agent:claude:attention:b", sessionID: id)
+        reporter.agentNotification(payload: "conterm-agent:claude:done:", sessionID: id)
+        let keys = emitter.calls.map(\.dedupeKey)
+        #expect(keys[0] == keys[1], "two attention pings are one situation")
+        #expect(keys[2] != keys[0], "finishing is a different situation from waiting")
+    }
+
+    @Test("an empty OSC payload emits nothing")
+    func emptyPayloadIsSilent() {
+        let (reporter, emitter) = self.reporter()
+        reporter.agentNotification(payload: "  ", sessionID: UUID())
+        #expect(emitter.calls.isEmpty)
+    }
+
     @Test("every kind Rune emits is one the host will accept")
     func kindsAreValid() {
         let (reporter, emitter) = self.reporter()
@@ -139,6 +179,8 @@ struct RuneSignalReporterTests {
         reporter.sessionEnded(exitCode: 0, isRemote: true, host: "h", sessionID: UUID())
         reporter.startupNotices(["x"], sessionID: UUID())
         reporter.bellRang(sessionID: UUID())
+        reporter.agentNotification(payload: "conterm-agent:claude:attention:x", sessionID: UUID())
+        reporter.agentNotification(payload: "conterm-agent:claude:error:x", sessionID: UUID())
         // The host rejects an invalid kind SILENTLY, which is how
         // `session.needsInput` was lost during planning. Assert, do not assume.
         for call in emitter.calls {
