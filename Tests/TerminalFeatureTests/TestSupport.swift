@@ -123,6 +123,9 @@ final class FakeHostServices: HostServices {
     let log: PluginLogger = FakeLogger()
     let apps: PluginAppLauncher = FakeAppLauncher()
     let presentation: PluginPresentationControl = FakePresentationControl()
+    /// Generation 9. A no-op is right for a fake: the tests are about Rune, not
+    /// about what the host does with an event.
+    let signals: PluginSignalEmitter = NoopSignalEmitter()
     let context: PluginContextRegistry
     let actions: AgentActionProvider
 

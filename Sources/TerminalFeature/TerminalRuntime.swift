@@ -61,7 +61,7 @@ enum TerminalRuntime {
     static func mcpServer(for host: HostServices) -> MCPAppServer {
         mcpServers.value(for: instance(of: host)) {
             let (server, failures) = TerminalMCPServer.make(
-                appID: TerminalApp.id, bridge: contextBridge(for: host))
+                appID: RuneApp.id, bridge: contextBridge(for: host))
             // A dropped resource is a silently missing capability — say so
             // rather than let the assistant just never see it.
             if !failures.isEmpty {

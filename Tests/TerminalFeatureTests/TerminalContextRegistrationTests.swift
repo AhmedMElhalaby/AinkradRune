@@ -39,7 +39,7 @@ struct TerminalContextRegistrationTests {
         #expect(snaps.count == 1)
         #expect(snaps.first?.kind == "terminal")
         #expect(snaps.first?.text == "on screen")
-        #expect(snaps.first?.title == "Terminal — /tmp")
+        #expect(snaps.first?.title == "Rune — /tmp")
     }
 
     @Test("different hosts get different bridges and registrations")

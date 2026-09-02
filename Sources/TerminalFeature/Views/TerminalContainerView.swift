@@ -29,6 +29,42 @@ final class AinkradTerminalView: LocalProcessTerminalView {
     var onReady: (() -> Void)?
     private var didBecomeReady = false
 
+    /// Fired when the program running in this pane rings the terminal bell.
+    ///
+    /// Overriding is the only way to see it: `LocalProcessTerminalView` makes
+    /// itself the `terminalDelegate` and forwards just four callbacks to its
+    /// `processDelegate` — sizeChanged, setTerminalTitle,
+    /// hostCurrentDirectoryUpdate and processTerminated. `bell` is not among
+    /// them, so it reaches this window and dies here unless we catch it.
+    ///
+    /// This is how a CLI says "I need you": Claude Code's terminal-bell
+    /// notification channel writes BEL, and so does anything else that wants
+    /// attention without owning a UI.
+    var onBell: (() -> Void)?
+
+    /// Fired for `ESC ] 9 ; <payload>` — iTerm2's notification sequence, and
+    /// the one coding-agent hooks actually use.
+    ///
+    /// Registered rather than overridden: SwiftTerm exposes
+    /// `Terminal.registerOscHandler(code:handler:)`, so this needs no change to
+    /// the terminal emulator itself.
+    var onOSCNotification: ((String) -> Void)?
+
+    /// Claims OSC 9. Called once the terminal exists.
+    func installNotificationHandler() {
+        getTerminal().registerOscHandler(code: 9) { [weak self] data in
+            guard let self, let payload = String(bytes: data, encoding: .utf8) else { return }
+            Task { @MainActor in self.onOSCNotification?(payload) }
+        }
+    }
+
+    override func bell(source: Terminal) {
+        // Still ring: the audible/visual bell is the terminal's own behaviour
+        // and reporting it is additive, not a replacement.
+        super.bell(source: source)
+        onBell?()
+    }
+
     /// True when this pane owns the window's keyboard focus.
     ///
     /// Used to keep the agent's terminal context on the pane the user is
@@ -75,6 +111,7 @@ struct TerminalContainerView: NSViewRepresentable {
     let session: TerminalSession
     let appearance: TerminalRenderAppearance
     let contextBridge: TerminalContextBridge
+    let reporter: RuneSignalReporter
     /// True for the single pane that fills the Focus-Mode canvas — its resize
     /// applies immediately (no debounce) so the zoom-in fills without a flash.
     @Environment(\.paneResizesImmediately) private var resizesImmediately
@@ -82,6 +119,11 @@ struct TerminalContainerView: NSViewRepresentable {
     func makeNSView(context: Context) -> AinkradTerminalView {
         let view = AinkradTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
+        view.onBell = { [weak coordinator = context.coordinator] in coordinator?.bellRang() }
+        view.onOSCNotification = { [weak coordinator = context.coordinator] payload in
+            coordinator?.oscNotification(payload)
+        }
+        view.installNotificationHandler()
         view.applyResizeImmediately = resizesImmediately
         apply(appearance, to: view, coordinator: context.coordinator)
         context.coordinator.installScrollReveal(for: view)
@@ -206,12 +248,13 @@ struct TerminalContainerView: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(session: session, contextBridge: contextBridge)
+        Coordinator(session: session, contextBridge: contextBridge, reporter: reporter)
     }
 
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         private let session: TerminalSession
         let contextBridge: TerminalContextBridge
+        private let reporter: RuneSignalReporter
         var appliedAppearance: TerminalRenderAppearance?
         var appliedScrollback: Int?
 
@@ -220,9 +263,11 @@ struct TerminalContainerView: NSViewRepresentable {
         private var scrollMonitor: Any?
         private var hideWork: DispatchWorkItem?
 
-        init(session: TerminalSession, contextBridge: TerminalContextBridge) {
+        init(session: TerminalSession, contextBridge: TerminalContextBridge,
+             reporter: RuneSignalReporter) {
             self.session = session
             self.contextBridge = contextBridge
+            self.reporter = reporter
         }
 
         /// Hides SwiftTerm's always-on scrollbar and reveals it only while the
@@ -266,9 +311,29 @@ struct TerminalContainerView: NSViewRepresentable {
         func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
 
+        /// A program in this pane asked to show a notification (OSC 9).
+        func oscNotification(_ payload: String) {
+            Task { @MainActor [session, reporter] in
+                reporter.agentNotification(payload: payload, sessionID: session.id)
+            }
+        }
+
+        /// The program in this pane rang the bell.
+        func bellRang() {
+            Task { @MainActor [session, reporter] in
+                reporter.bellRang(sessionID: session.id)
+            }
+        }
+
         func processTerminated(source: TerminalView, exitCode: Int32?) {
-            Task { @MainActor [session] in
+            Task { @MainActor [session, reporter] in
                 session.terminate()
+                // Reported after `terminate()`, so the session is already in its
+                // final state if anything reads it from the feed.
+                reporter.sessionEnded(exitCode: exitCode,
+                                      isRemote: session.launchExecutable != nil,
+                                      host: session.remoteHost,
+                                      sessionID: session.id)
             }
         }
     }
