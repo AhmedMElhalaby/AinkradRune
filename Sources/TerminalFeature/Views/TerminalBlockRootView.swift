@@ -8,6 +8,7 @@ import AinkradAppKit
 struct TerminalBlockRootView: View {
     let settingsStore: TerminalSettingsStore
     let contextBridge: TerminalContextBridge
+    let reporter: RuneSignalReporter
     let theme: HostTheme
     let takeLaunch: () -> SSHLaunch?
     @State private var session: TerminalSession?
@@ -25,7 +26,8 @@ struct TerminalBlockRootView: View {
                     if !session.startupNotices.isEmpty && !isNoticeDismissed {
                         noticeBanner(session.startupNotices)
                     }
-                    TerminalContainerView(session: session, appearance: appearance, contextBridge: contextBridge)
+                    TerminalContainerView(session: session, appearance: appearance,
+                                          contextBridge: contextBridge, reporter: reporter)
                 }
             } else {
                 Color.clear
@@ -34,7 +36,13 @@ struct TerminalBlockRootView: View {
         .onAppear {
             guard session == nil else { return }
             let launch = takeLaunch()
-            session = TerminalSessionFactory(settings: settingsStore.settings).makeSession(launch: launch)
+            let created = TerminalSessionFactory(settings: settingsStore.settings)
+                .makeSession(launch: launch)
+            session = created
+            // The banner above shows these while the block is open; the feed
+            // keeps them after it is gone, which is when the user usually
+            // wonders why their shell is not the one they configured.
+            reporter.startupNotices(created.startupNotices, sessionID: created.id)
         }
     }
 

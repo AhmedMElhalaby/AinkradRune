@@ -75,6 +75,7 @@ struct TerminalContainerView: NSViewRepresentable {
     let session: TerminalSession
     let appearance: TerminalRenderAppearance
     let contextBridge: TerminalContextBridge
+    let reporter: RuneSignalReporter
     /// True for the single pane that fills the Focus-Mode canvas — its resize
     /// applies immediately (no debounce) so the zoom-in fills without a flash.
     @Environment(\.paneResizesImmediately) private var resizesImmediately
@@ -206,12 +207,13 @@ struct TerminalContainerView: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(session: session, contextBridge: contextBridge)
+        Coordinator(session: session, contextBridge: contextBridge, reporter: reporter)
     }
 
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         private let session: TerminalSession
         let contextBridge: TerminalContextBridge
+        private let reporter: RuneSignalReporter
         var appliedAppearance: TerminalRenderAppearance?
         var appliedScrollback: Int?
 
@@ -220,9 +222,11 @@ struct TerminalContainerView: NSViewRepresentable {
         private var scrollMonitor: Any?
         private var hideWork: DispatchWorkItem?
 
-        init(session: TerminalSession, contextBridge: TerminalContextBridge) {
+        init(session: TerminalSession, contextBridge: TerminalContextBridge,
+             reporter: RuneSignalReporter) {
             self.session = session
             self.contextBridge = contextBridge
+            self.reporter = reporter
         }
 
         /// Hides SwiftTerm's always-on scrollbar and reveals it only while the
@@ -267,8 +271,14 @@ struct TerminalContainerView: NSViewRepresentable {
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
-            Task { @MainActor [session] in
+            Task { @MainActor [session, reporter] in
                 session.terminate()
+                // Reported after `terminate()`, so the session is already in its
+                // final state if anything reads it from the feed.
+                reporter.sessionEnded(exitCode: exitCode,
+                                      isRemote: session.launchExecutable != nil,
+                                      host: session.remoteHost,
+                                      sessionID: session.id)
             }
         }
     }
