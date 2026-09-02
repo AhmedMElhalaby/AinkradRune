@@ -86,11 +86,17 @@ struct RuneSignalReporter {
             // case where not knowing costs the whole wait. "Finished" can wait
             // for the user to look.
             importance: parsed.kind == .attention ? .urgent : .normal,
-            // Clicking the row opens Rune. The transcript path rides along as
-            // the payload so a future Rune can jump to the right pane.
+            // Clicking the row focuses the PANE holding this session, not
+            // merely the app. `locator` is the field the host is allowed to
+            // compare, and it matches what the pane reported through
+            // `ainkradPaneLocator`; the payload stays opaque and keeps
+            // carrying the transcript path for Rune's own use.
+            //
+            // "a future Rune can jump to the right pane" is now this Rune.
             deepLink: SignalDeepLink(
                 appID: "rune",
-                payload: Data("\(sessionID.uuidString)|\(parsed.detail ?? "")".utf8)),
+                payload: Data("\(sessionID.uuidString)|\(parsed.detail ?? "")".utf8),
+                locator: sessionID.uuidString),
             // Per session and per KIND, not per title: an agent that asks for
             // attention repeatedly is one situation, and the host coalesces it
             // into a single row with a count.
