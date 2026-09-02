@@ -10,6 +10,7 @@ struct RuneSignalReporterTests {
     final class RecordingEmitter: PluginSignalEmitter {
         struct Call {
             let kind: String
+            let deepLink: SignalDeepLink?
             let severity: SignalSeverity
             let title: String
             let body: String?
@@ -20,7 +21,8 @@ struct RuneSignalReporterTests {
         func emit(kind: String, severity: SignalSeverity, title: String, body: String?,
                   importance: SignalImportance, deepLink: SignalDeepLink?,
                   actions: [SignalAction], dedupeKey: String?) {
-            calls.append(Call(kind: kind, severity: severity, title: title, body: body,
+            calls.append(Call(kind: kind, deepLink: deepLink, severity: severity,
+                              title: title, body: body,
                               importance: importance, dedupeKey: dedupeKey))
         }
         func own(limit: Int) -> [SignalEvent] { [] }
@@ -104,35 +106,15 @@ struct RuneSignalReporterTests {
         #expect(emitter.calls[0].body?.contains("/tmp/gone") == true)
     }
 
-    @Test("a terminal bell is reported as an attention request, not a problem")
-    func bellIsReported() {
+    @Test("the bell no longer files a row — OSC 9 carries real agents")
+    func bellIsSilent() {
         let (reporter, emitter) = self.reporter()
-        reporter.bellRang(sessionID: UUID())
-        #expect(emitter.calls.count == 1)
-        #expect(emitter.calls[0].kind == "terminal.bell")
-        #expect(emitter.calls[0].severity == .info,
-                "a bell is an attention request; some shells ring it for tab completion")
-        #expect(emitter.calls[0].title == "Terminal needs your attention")
+        for _ in 0..<5 { reporter.bellRang(sessionID: UUID()) }
+        #expect(emitter.calls.isEmpty,
+                "shells ring the bell for tab completion; a row per bell was pure noise")
     }
 
-    @Test("repeated bells in one session share a dedupe key, so they coalesce")
-    func bellsCoalescePerSession() {
-        let (reporter, emitter) = self.reporter()
-        let id = UUID()
-        for _ in 0..<5 { reporter.bellRang(sessionID: id) }
-        #expect(Set(emitter.calls.map(\.dedupeKey)).count == 1,
-                "a run of bells must be one row with a count, not five rows")
-    }
-
-    @Test("bells from different sessions do not coalesce into each other")
-    func bellsAreScopedToSession() {
-        let (reporter, emitter) = self.reporter()
-        reporter.bellRang(sessionID: UUID())
-        reporter.bellRang(sessionID: UUID())
-        #expect(Set(emitter.calls.map(\.dedupeKey)).count == 2)
-    }
-
-    @Test("Claude Code's real hook payload becomes an urgent attention event")
+    @Test("Claude Code's real hook payload becomes one urgent, clickable event")
     func agentAttention() {
         let (reporter, emitter) = self.reporter()
         reporter.agentNotification(
@@ -140,29 +122,40 @@ struct RuneSignalReporterTests {
         #expect(emitter.calls.count == 1)
         #expect(emitter.calls[0].kind == "terminal.agent-attention")
         #expect(emitter.calls[0].title == "Claude needs your attention")
-        #expect(emitter.calls[0].body == "/tmp/t.jsonl")
-        #expect(emitter.calls[0].importance == .urgent,
-                "an agent blocked on you is the case where not knowing costs the whole wait")
+        #expect(emitter.calls[0].importance == .urgent)
+        #expect(emitter.calls[0].deepLink?.appID == "rune", "the row must open Rune")
     }
 
-    @Test("an agent error is a warning with its own kind")
-    func agentError() {
+    @Test("lifecycle chatter files nothing at all")
+    func lifecycleIsSilent() {
         let (reporter, emitter) = self.reporter()
-        reporter.agentNotification(payload: "conterm-agent:claude:error:boom", sessionID: UUID())
-        #expect(emitter.calls[0].kind == "terminal.agent-error")
-        #expect(emitter.calls[0].severity == .warning)
+        for state in ["start", "prompt", "idle"] {
+            reporter.agentNotification(payload: "conterm-agent:claude:\(state):/tmp/t",
+                                       sessionID: UUID())
+        }
+        #expect(emitter.calls.isEmpty,
+                "one real session produced eleven of these against three real pings")
     }
 
-    @Test("attention and finished are separate rows, but a repeat of either coalesces")
-    func agentDedupeKeys() {
+    @Test("repeated attention in one session is ONE row, whatever the detail")
+    func attentionCoalesces() {
         let (reporter, emitter) = self.reporter()
         let id = UUID()
         reporter.agentNotification(payload: "conterm-agent:claude:attention:a", sessionID: id)
         reporter.agentNotification(payload: "conterm-agent:claude:attention:b", sessionID: id)
+        reporter.agentNotification(payload: "conterm-agent:claude:attention:c", sessionID: id)
+        #expect(Set(emitter.calls.map(\.dedupeKey)).count == 1,
+                "keying on the title split 'attention' from 'Claude: prompt' into many rows")
+    }
+
+    @Test("finishing is a different row from waiting")
+    func finishedIsSeparate() {
+        let (reporter, emitter) = self.reporter()
+        let id = UUID()
+        reporter.agentNotification(payload: "conterm-agent:claude:attention:a", sessionID: id)
         reporter.agentNotification(payload: "conterm-agent:claude:done:", sessionID: id)
-        let keys = emitter.calls.map(\.dedupeKey)
-        #expect(keys[0] == keys[1], "two attention pings are one situation")
-        #expect(keys[2] != keys[0], "finishing is a different situation from waiting")
+        #expect(emitter.calls[0].dedupeKey != emitter.calls[1].dedupeKey)
+        #expect(emitter.calls[1].importance == .normal, "finished can wait for the user to look")
     }
 
     @Test("an empty OSC payload emits nothing")
@@ -178,7 +171,6 @@ struct RuneSignalReporterTests {
         reporter.sessionEnded(exitCode: 1, isRemote: false, host: nil, sessionID: UUID())
         reporter.sessionEnded(exitCode: 0, isRemote: true, host: "h", sessionID: UUID())
         reporter.startupNotices(["x"], sessionID: UUID())
-        reporter.bellRang(sessionID: UUID())
         reporter.agentNotification(payload: "conterm-agent:claude:attention:x", sessionID: UUID())
         reporter.agentNotification(payload: "conterm-agent:claude:error:x", sessionID: UUID())
         // The host rejects an invalid kind SILENTLY, which is how

@@ -53,24 +53,16 @@ struct RuneSignalReporter {
 
     /// The program running in a pane rang the terminal bell.
     ///
-    /// This is the "a CLI wants you" case — Claude Code's terminal-bell channel
-    /// writes BEL when a turn finishes or it needs input, and so does anything
-    /// else that has no UI of its own.
+    /// **Deliberately not reported.** The first cut emitted a row per bell, and
+    /// the shells ring it for ambiguous tab-completion — so the feed filled
+    /// with rows the user did not ask for. Real agents announce themselves
+    /// through OSC 9 (below), which carries text and a state; a bare BEL
+    /// carries one byte and cannot say who rang or why.
     ///
-    /// `.info`, not `.warning`: a bell is an attention request, not a problem,
-    /// and some shells also ring it for ambiguous tab-completion. The dedupe key
-    /// is the session, so a run of bells coalesces into one row with a count
-    /// rather than a wall of identical rows — which is what makes it safe to
-    /// report something a shell can emit incidentally.
-    func bellRang(sessionID: UUID) {
-        signals.emit(
-            kind: "terminal.bell",
-            severity: .info,
-            title: "Terminal needs your attention",
-            body: nil,
-            importance: .normal,
-            dedupeKey: "rune.bell:\(sessionID.uuidString)")
-    }
+    /// Kept as a no-op rather than deleted: the capture in
+    /// `AinkradTerminalView` is the hard part, and a future setting could
+    /// reasonably turn this back on.
+    func bellRang(sessionID: UUID) {}
 
     /// A program in the pane asked to show a notification, via OSC 9.
     ///
@@ -79,23 +71,39 @@ struct RuneSignalReporter {
     /// BEL`, and the trailing BEL is the sequence terminator rather than a
     /// bell — so a terminal listening only for bells hears nothing.
     ///
-    /// Unlike `bellRang`, this carries text, so the row can say which agent
-    /// wants you and why.
+    /// Lifecycle states (start, prompt, idle) are dropped by the parser; only
+    /// attention, finished and failed reach the feed.
     func agentNotification(payload: String, sessionID: UUID) {
         guard let parsed = TerminalOSCNotification.parse(payload) else { return }
-        let isError = TerminalOSCNotification.isError(payload)
+
+        let severity: SignalSeverity = parsed.kind == .failed ? .warning : .info
         signals.emit(
-            kind: isError ? "terminal.agent-error" : "terminal.agent-attention",
-            severity: isError ? .warning : .info,
+            kind: kindName(for: parsed.kind),
+            severity: severity,
             title: parsed.title,
             body: parsed.body,
-            // `.urgent` for attention: an agent that is BLOCKED on you is the
-            // single most valuable notification in the product — it is the case
-            // where not knowing costs you the whole wait.
-            importance: isError ? .urgent : .urgent,
-            // Per session AND per title, so "needs attention" and "finished"
-            // are separate rows while a repeat of either coalesces.
-            dedupeKey: "rune.agent:\(sessionID.uuidString):\(parsed.title)")
+            // `.urgent` only when the agent is BLOCKED on the user: that is the
+            // case where not knowing costs the whole wait. "Finished" can wait
+            // for the user to look.
+            importance: parsed.kind == .attention ? .urgent : .normal,
+            // Clicking the row opens Rune. The transcript path rides along as
+            // the payload so a future Rune can jump to the right pane.
+            deepLink: SignalDeepLink(
+                appID: "rune",
+                payload: Data("\(sessionID.uuidString)|\(parsed.detail ?? "")".utf8)),
+            // Per session and per KIND, not per title: an agent that asks for
+            // attention repeatedly is one situation, and the host coalesces it
+            // into a single row with a count.
+            dedupeKey: "rune.agent:\(sessionID.uuidString):\(kindName(for: parsed.kind))")
+    }
+
+    private func kindName(for kind: TerminalOSCNotification.Kind) -> String {
+        switch kind {
+        case .attention: return "terminal.agent-attention"
+        case .finished: return "terminal.agent-finished"
+        case .failed: return "terminal.agent-error"
+        case .message, .lifecycle: return "terminal.message"
+        }
     }
 
     /// A configured shell or working directory was rejected at startup. Rune

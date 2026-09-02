@@ -9,41 +9,45 @@ struct TerminalOSCNotificationTests {
         let parsed = TerminalOSCNotification.parse(
             "conterm-agent:claude:attention:/Users/me/.claude/projects/x/abc.jsonl")
         #expect(parsed?.title == "Claude needs your attention")
-        #expect(parsed?.body == "/Users/me/.claude/projects/x/abc.jsonl")
+        #expect(parsed?.kind == .attention)
+        #expect(parsed?.body == "In Rune. Click to open the terminal.",
+                "the body is for a human; the path is machine detail")
+        #expect(parsed?.detail == "/Users/me/.claude/projects/x/abc.jsonl",
+                "but the path is still carried, for the deep link")
     }
 
-    @Test("a completion state reads as finished, not as attention")
-    func completionState() {
-        #expect(TerminalOSCNotification.parse("conterm-agent:codex:done:")?.title
-                == "Codex finished")
+    /// The states one real Claude Code session produced, with their counts.
+    /// `prompt` seven times and `idle` three times against three real
+    /// `attention` pings is why lifecycle states are dropped.
+    @Test(arguments: ["start", "prompt", "idle", "thinking", "tool"])
+    func lifecycleStatesAreDropped(state: String) {
+        #expect(TerminalOSCNotification.parse("conterm-agent:claude:\(state):/tmp/t") == nil,
+                "an agent's heartbeat is not a notification")
     }
 
-    @Test("an error state is recognised as an error")
-    func errorState() {
-        #expect(TerminalOSCNotification.parse("conterm-agent:claude:error:boom")?.title
-                == "Claude hit an error")
-        #expect(TerminalOSCNotification.isError("conterm-agent:claude:error:boom"))
-        #expect(!TerminalOSCNotification.isError("conterm-agent:claude:attention:x"))
+    @Test("the three states that ARE notifications survive")
+    func realNotificationsSurvive() {
+        #expect(TerminalOSCNotification.parse("conterm-agent:claude:attention:x")?.kind == .attention)
+        #expect(TerminalOSCNotification.parse("conterm-agent:codex:done:")?.kind == .finished)
+        #expect(TerminalOSCNotification.parse("conterm-agent:claude:error:boom")?.kind == .failed)
     }
 
-    @Test("an unknown state still surfaces, rather than being swallowed")
-    func unknownState() {
-        let parsed = TerminalOSCNotification.parse("conterm-agent:claude:pondering:x")
-        #expect(parsed?.title == "Claude: pondering",
-                "inventing silence for an unrecognised word loses the notification")
+    @Test("a completion names the agent")
+    func completionNaming() {
+        #expect(TerminalOSCNotification.parse("conterm-agent:codex:done:")?.title == "Codex finished")
     }
 
-    @Test("a plain iTerm2 message is the whole payload")
+    @Test("a plain iTerm2 message is the whole payload and is kept")
     func plainMessage() {
         let parsed = TerminalOSCNotification.parse("Build finished")
         #expect(parsed?.title == "Build finished")
-        #expect(parsed?.body == nil)
+        #expect(parsed?.kind == .message)
     }
 
     @Test("a path containing colons survives — it is rejoined, not truncated")
     func pathWithColons() {
-        let parsed = TerminalOSCNotification.parse("conterm-agent:claude:attention:a:b:c")
-        #expect(parsed?.body == "a:b:c", "splitting on every colon would corrupt the detail")
+        #expect(TerminalOSCNotification.parse("conterm-agent:claude:attention:a:b:c")?.detail
+                == "a:b:c")
     }
 
     @Test("an empty payload yields nothing")
@@ -54,9 +58,6 @@ struct TerminalOSCNotificationTests {
 
     @Test("a truncated conterm payload degrades to a plain message")
     func truncatedContermPayload() {
-        // Two segments, so it is not the agent shape; better to show the raw
-        // text than to drop it.
-        #expect(TerminalOSCNotification.parse("conterm-agent:claude")?.title
-                == "conterm-agent:claude")
+        #expect(TerminalOSCNotification.parse("conterm-agent:claude")?.kind == .message)
     }
 }
