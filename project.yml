@@ -21,7 +21,10 @@ packages:
     # pin — the host embeds the one dynamic copy of the SDK, and a plugin built
     # against a newer revision links symbols that copy does not define and dies
     # at Bundle.load() with no diagnostic.
-    revision: 9b10f58b3f4fb2845ebdf0ecb10e579c8dfca4bb
+    # Generation 10: SignalDeepLink.locator and the ainkradPaneLocator
+    # environment sink, so a notification from one terminal session focuses
+    # THAT pane rather than the first Rune pane on screen.
+    revision: 0ee30bcfc46be0872255bcad10bc7b12b73a71b0
 targets:
   # Static library: its objects (and the statically-linked SwiftTerm) fold into
   # whatever links it. AinkradAppKit is dynamic and NEVER embedded — resolved

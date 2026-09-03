@@ -11,6 +11,11 @@ struct TerminalBlockRootView: View {
     let reporter: RuneSignalReporter
     let theme: HostTheme
     let takeLaunch: () -> SSHLaunch?
+    /// Where this pane says which session it is holding, so a notification
+    /// from that session focuses THIS pane and not whichever Rune pane happens
+    /// to be first. Generation 10; the host's default sink discards, so this
+    /// is harmless under an older host.
+    @Environment(\.ainkradPaneLocator) private var paneLocator
     @State private var session: TerminalSession?
     @State private var isNoticeDismissed = false
 
@@ -39,6 +44,11 @@ struct TerminalBlockRootView: View {
             let created = TerminalSessionFactory(settings: settingsStore.settings)
                 .makeSession(launch: launch)
             session = created
+            // Reported as soon as the session exists, and BEFORE any
+            // notification it could produce: an agent that asks for attention
+            // in its first second must still be findable. The value matches
+            // what `RuneSignalReporter` puts in the deep link's locator.
+            paneLocator(created.id.uuidString)
             // The banner above shows these while the block is open; the feed
             // keeps them after it is gone, which is when the user usually
             // wonders why their shell is not the one they configured.

@@ -126,6 +126,34 @@ struct RuneSignalReporterTests {
         #expect(emitter.calls[0].deepLink?.appID == "rune", "the row must open Rune")
     }
 
+    @Test("the deep link carries the session id as its locator, so the right PANE focuses")
+    func deepLinkCarriesLocator() {
+        // The host matches this against what a pane reported through
+        // `ainkradPaneLocator`. Without it, a notification from the third Rune
+        // pane focuses the first one and looks like it worked — which is worse
+        // than not focusing at all, because nothing tells the user they are in
+        // the wrong session.
+        let (reporter, emitter) = self.reporter()
+        let session = UUID()
+        reporter.agentNotification(
+            payload: "conterm-agent:claude:attention:/tmp/t.jsonl", sessionID: session)
+        #expect(emitter.calls[0].deepLink?.locator == session.uuidString)
+    }
+
+    @Test("the payload still carries the transcript path, unchanged and opaque")
+    func payloadStillCarriesTranscript() {
+        // The locator is what the HOST may compare; the payload remains Rune's
+        // own business. Adding the locator must not have quietly changed what
+        // Rune sends itself.
+        let (reporter, emitter) = self.reporter()
+        let session = UUID()
+        reporter.agentNotification(
+            payload: "conterm-agent:claude:attention:/tmp/t.jsonl", sessionID: session)
+        let payload = String(decoding: emitter.calls[0].deepLink?.payload ?? Data(),
+                             as: UTF8.self)
+        #expect(payload == "\(session.uuidString)|/tmp/t.jsonl")
+    }
+
     @Test("lifecycle chatter files nothing at all")
     func lifecycleIsSilent() {
         let (reporter, emitter) = self.reporter()
