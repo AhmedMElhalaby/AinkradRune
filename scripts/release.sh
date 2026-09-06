@@ -45,6 +45,12 @@ cat > dist/ainkrad-plugin.json <<JSON
   "links": [] }
 JSON
 
+# `--target` is NOT optional. Without it `gh release create` tags the
+# repository's DEFAULT BRANCH head, not the commit this bundle was built
+# from -- so the uploaded zip and its sha256 can come from code the tag does
+# not contain. That shipped: the host's v0.17.1 tag landed on the previous
+# release's commit while its asset held 79 newer commits.
 gh release create "$VERSION" dist/ainkrad-plugin.json dist/rune.bundle.zip \
+  --target "$(git rev-parse HEAD)" \
   --title "Rune $VERSION" --notes "Ainkrad Rune plugin $VERSION"
 echo "Released $VERSION (sha256 $SHA)"
