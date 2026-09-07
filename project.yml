@@ -16,7 +16,7 @@ packages:
     url: https://github.com/AhmedMElhalaby/SwiftTerm
     revision: e44352494333686a5de418f85f7927b81c6a9fbe
   AinkradAppKit:
-    url: https://github.com/AhmedMElhalaby/AinkradAppKit
+    url: https://github.com/AinkradHQ/AinkradAppKit
     # Generation 9: HostServices.signals. MUST NOT be ahead of the host's own
     # pin — the host embeds the one dynamic copy of the SDK, and a plugin built
     # against a newer revision links symbols that copy does not define and dies

@@ -72,7 +72,7 @@ SHA="$(shasum -a 256 dist/rune.bundle.zip | awk '{print $1}')"
 
 # Promo shots served from the repo's default branch. This said `master`, which
 # no longer exists — the family unified on main/staging/development.
-SHOTS_BASE="https://raw.githubusercontent.com/AhmedMElhalaby/AinkradRune/main/screenshots"
+SHOTS_BASE="https://raw.githubusercontent.com/AinkradHQ/AinkradRune/main/screenshots"
 
 # apiVersion is READ FROM THE BUILT BUNDLE, not hardcoded here.
 #
@@ -120,7 +120,7 @@ echo "Released $VERSION (sha256 $SHA)"
 # invisible in the app for three days because the catalog still served v0.6.0.
 # Updating the catalog is part of releasing, not a chore to remember afterwards.
 SOURCE_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
-CATALOG_REPO="AhmedMElhalaby/AinkradCatalog"
+CATALOG_REPO="AinkradHQ/AinkradCatalog"
 CATALOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$CATALOG_DIR"' EXIT
 
