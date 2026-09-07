@@ -14,6 +14,7 @@ public struct RuneApp: AinkradApp {
         return AnyView(TerminalBlockRootView(
             settingsStore: TerminalRuntime.settingsStore(for: host),
             contextBridge: TerminalRuntime.contextBridge(for: host),
+            reporter: RuneSignalReporter(signals: host.signals),
             theme: host.theme,
             takeLaunch: { SSHLaunchPayload.pending(from: host.apps.takePendingLaunch()) }
         ))

@@ -17,7 +17,14 @@ packages:
     revision: e44352494333686a5de418f85f7927b81c6a9fbe
   AinkradAppKit:
     url: https://github.com/AhmedMElhalaby/AinkradAppKit
-    revision: 60036ad9abe5d0ca4e84109bcc78a51f7b8578f0
+    # Generation 9: HostServices.signals. MUST NOT be ahead of the host's own
+    # pin — the host embeds the one dynamic copy of the SDK, and a plugin built
+    # against a newer revision links symbols that copy does not define and dies
+    # at Bundle.load() with no diagnostic.
+    # Generation 10: SignalDeepLink.locator and the ainkradPaneLocator
+    # environment sink, so a notification from one terminal session focuses
+    # THAT pane rather than the first Rune pane on screen.
+    revision: 6cd1599a602e0a7d20f5d9d87b08c547417f3a4e
 targets:
   # Static library: its objects (and the statically-linked SwiftTerm) fold into
   # whatever links it. AinkradAppKit is dynamic and NEVER embedded — resolved

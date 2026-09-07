@@ -41,4 +41,18 @@ final class TerminalSession {
     func terminate() {
         isRunning = false
     }
+
+    /// The remote host, for a session launched over SSH.
+    ///
+    /// Derived from the invocation rather than stored: `SSHInvocation.argv`
+    /// puts the destination last, optionally as `user@host`, and the username
+    /// is not part of what a notification should say — "SSH session to
+    /// build-box ended" reads better than "to deploy@build-box", and the
+    /// username can be a shared account that identifies nothing.
+    var remoteHost: String? {
+        guard launchExecutable != nil, let destination = launchArgs?.last else { return nil }
+        guard let at = destination.lastIndex(of: "@") else { return destination }
+        let host = String(destination[destination.index(after: at)...])
+        return host.isEmpty ? nil : host
+    }
 }
